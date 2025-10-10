@@ -1,0 +1,128 @@
+﻿@page "/"
+@using QRCoder
+@using System.IO
+@inject IJSRuntime JSRuntime
+
+<PageTitle>QR Code Generator</PageTitle>
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-12 col-md-10 col-lg-8">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h1 class="h3 mb-0">QR Code Generator</h1>
+                </div>
+                <div class="card-body">
+                    @* <p class="text-muted">Enter text or URL to generate a QR code</p> *@
+                    
+                    <div class="mb-3">
+                        <label for="inputText" class="form-label">Text or URL</label>
+                        <textarea 
+                            class="form-control" 
+                            id="inputText" 
+                            rows="3" 
+                            @bind="inputText"
+                            @bind:event="oninput"
+                            placeholder="Enter text or URL here..."
+                            aria-label="Text or URL input"></textarea>
+                    </div>
+
+                    <button 
+                        class="btn btn-primary w-100 mb-3" 
+                        @onclick="GenerateQRCode"
+                        disabled="@string.IsNullOrWhiteSpace(inputText)">
+                        <i class="bi bi-qr-code"></i> Generate QR Code
+                    </button>
+
+                    @if (!string.IsNullOrEmpty(qrCodeBase64))
+                    {
+                        <div class="text-center">
+                            <div class="card mb-3">
+                                <div class="card-body">
+                                    <img src="@qrCodeBase64" alt="Generated QR Code" class="img-fluid" style="max-width: 400px;" />
+                                </div>
+                            </div>
+                            
+                            <button 
+                                class="btn btn-success" 
+                                @onclick="DownloadQRCode">
+                                <i class="bi bi-download"></i> Download QR Code
+                            </button>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="alert alert-danger mt-3" role="alert">
+                            @errorMessage
+                        </div>
+                    }
+                </div>
+            </div>
+
+            @* <div class="mt-4 text-muted text-center">
+                <small>
+                    <p>✓ Client-side generation - no data sent to server</p>
+                    <p>✓ Works offline after initial load</p>
+                </small>
+            </div> *@
+        </div>
+    </div>
+</div>
+
+@code {
+    private string inputText = string.Empty;
+    private string qrCodeBase64 = string.Empty;
+    private string errorMessage = string.Empty;
+
+    private void GenerateQRCode()
+    {
+        try
+        {
+            errorMessage = string.Empty;
+            
+            if (string.IsNullOrWhiteSpace(inputText))
+            {
+                errorMessage = "Please enter text or URL to generate QR code.";
+                return;
+            }
+
+            // Create QR code generator
+            QRCodeGenerator qrGenerator = new QRCodeGenerator();
+            QRCodeData qrCodeData = qrGenerator.CreateQrCode(inputText, QRCodeGenerator.ECCLevel.Q);
+            
+            // Generate QR code as PNG
+            PngByteQRCode qrCode = new PngByteQRCode(qrCodeData);
+            byte[] qrCodeBytes = qrCode.GetGraphic(20);
+            
+            // Convert to base64 for display
+            qrCodeBase64 = $"data:image/png;base64,{Convert.ToBase64String(qrCodeBytes)}";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error generating QR code: {ex.Message}";
+            qrCodeBase64 = string.Empty;
+        }
+    }
+
+    private async Task DownloadQRCode()
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(qrCodeBase64))
+            {
+                return;
+            }
+
+            // Extract base64 data from data URL
+            string base64Data = qrCodeBase64.Split(',')[1];
+            
+            // Download using JavaScript interop
+            await JSRuntime.InvokeVoidAsync("downloadFile", "qrcode.png", base64Data);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error downloading QR code: {ex.Message}";
+        }
+    }
+}
